@@ -2726,11 +2726,11 @@ SVG_COLORS = {
 # fmt: on
 
 
-def svg_scene(file, fg=None, width=None, fonts=None):
+def svg_scene(file, fg=None, width=None, height=None, fonts=None):
     """Load SVG scene from a file object"""
     fonts = FontsDB() if fonts is None else fonts
 
-    def svg_scene_rec(element, inherit, top=False, width=None):
+    def svg_scene_rec(element, inherit, top=False, width=None, height=None):
         tag = element.tag.split("}")[-1]
         attrs = svg_attrs(element.attrib, inherit)
         inherit = {k: v for k, v in attrs.items() if k in SVG_INHERIT}
@@ -2752,11 +2752,18 @@ def svg_scene(file, fg=None, width=None, fonts=None):
             viewbox = None
             if w is not None and h is not None:
                 viewbox = [0, 0, w, h]
-            if width is not None:
+            if width is not None and height is not None:
+                w, h = width, height
+            elif width is not None:
                 if w is not None and h is not None:
                     w, h = width, int(width * h / w)
                 else:
                     w, h = width, None
+            elif height is not None:
+                if w is not None and h is not None:
+                    w, h = int(height * w / h), height
+                else:
+                    w, h = None, height
             # viewbox transform
             viewbox = svg_floats(attrs.get("viewBox"), 4, 4) or viewbox
             if viewbox is not None:
@@ -3003,27 +3010,27 @@ def svg_scene(file, fg=None, width=None, fonts=None):
     tree = etree.parse(file)
     root = tree.getroot()
     inherit = dict(color=np.array([0.0, 0.0, 0.0, 1.0]) if fg is None else fg)
-    group = svg_scene_rec(root, inherit, True, width)
+    group = svg_scene_rec(root, inherit, True, width, height)
     if not group:
         return None, ids, size
     return Scene.group(group), ids, size
 
 
-def svg_scene_from_filepath(path, fg=None, width=None, fonts=None):
+def svg_scene_from_filepath(path, fg=None, width=None, height=None, fonts=None):
     """Load SVG scene from a file at specified path"""
     _, ext = os.path.splitext(path)
     path = os.path.expanduser(path)
     if ext in {".gz", ".svgz"}:
         with gzip.open(path, mode="rt", encoding="utf-8") as file:
-            return svg_scene(file, fg, width, fonts)
+            return svg_scene(file, fg, width, height, fonts)
     else:
         with open(path, encoding="utf-8") as file:
-            return svg_scene(file, fg, width, fonts)
+            return svg_scene(file, fg, width, height, fonts)
 
 
-def svg_scene_from_str(string, fg=None, width=None, fonts=None):
+def svg_scene_from_str(string, fg=None, width=None, height=None, fonts=None):
     """Load SVG scene from a string"""
-    return svg_scene(io.StringIO(string), fg, width, fonts)
+    return svg_scene(io.StringIO(string), fg, width, height, fonts)
 
 
 def svg_attrs(attrs, inherit=None):
@@ -3729,6 +3736,7 @@ def main() -> int:
     parser.add_argument("-bg", type=svg_color, help="set default background color")
     parser.add_argument("-fg", type=svg_color, help="set default foreground color")
     parser.add_argument("-w", "--width", type=int, help="output width")
+    parser.add_argument("--height", type=int, help="output height")
     parser.add_argument("-id", help="render single element with specified `id`")
     parser.add_argument(
         "-t", "--transform", type=svg_transform, help="apply additional transformation"
@@ -3759,7 +3767,7 @@ def main() -> int:
         ids, size = {}, None
     else:
         scene, ids, size = svg_scene_from_filepath(
-            opts.svg, fg=opts.fg, width=opts.width, fonts=fonts
+            opts.svg, fg=opts.fg, width=opts.width, height=opts.height, fonts=fonts
         )
     if scene is None:
         sys.stderr.write("[error] nothing to render\n")
